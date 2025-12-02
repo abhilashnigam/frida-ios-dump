@@ -72,6 +72,25 @@ def get_usb_iphone():
     return device
 
 
+def connect_to_iphone(remote_host=None, remote_port=27042):
+    if remote_host:
+        return get_remote_iphone(remote_host, remote_port)
+    else:
+        return get_usb_iphone()
+
+def get_remote_iphone(remote_host, remote_port=27042):
+    address = f"{remote_host}:{remote_port}"
+    dm = frida.get_device_manager()
+    while True:
+        try:
+            print(f"Connecting to remote iPhone at {address}...")
+            device = dm.add_remote_device(address)
+            print("Connected to remote Frida device!")
+            return device
+        except Exception as e:
+            print(f"Remote device not ready ({e}). Retrying...")
+            time.sleep(2)
+
 def generate_ipa(path, display_name):
     ipa_filename = display_name + '.ipa'
 
@@ -85,10 +104,11 @@ def generate_ipa(path, display_name):
             if key != 'app':
                 shutil.move(from_dir, to_dir)
 
-        target_dir = './' + PAYLOAD_DIR
+        target_dir = r'./' + PAYLOAD_DIR
         zip_args = ('zip', '-qr', os.path.join(os.getcwd(), ipa_filename), target_dir)
         subprocess.check_call(zip_args, cwd=TEMP_DIR)
         shutil.rmtree(PAYLOAD_PATH)
+        print('IPA saved successfully! @ "{}"'.format(os.path.join(os.getcwd(), ipa_filename)))
     except Exception as e:
         print(e)
         finished.set()
@@ -309,7 +329,8 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit(exit_code)
 
-    device = get_usb_iphone()
+    device = connect_to_iphone(args.ssh_host)
+    # device = get_usb_iphone()
 
     if args.list_applications:
         list_applications(device)
@@ -337,7 +358,7 @@ if __name__ == '__main__':
             (session, display_name, bundle_identifier) = open_target_app(device, name_or_bundleid)
             if output_ipa is None:
                 output_ipa = display_name
-            output_ipa = re.sub('\.ipa$', '', output_ipa)
+            output_ipa = re.sub(r'\.ipa$', '', output_ipa)
             if session:
                 start_dump(session, output_ipa)
         except paramiko.ssh_exception.NoValidConnectionsError as e:
